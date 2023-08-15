@@ -1,0 +1,13 @@
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+[Pp]ublish/
+[Pp]roperties/
+x64/
+x86/
+build/
+bld/
+[Bb]in/
+[Oo]bj/
+.vs/
