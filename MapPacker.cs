@@ -1,12 +1,24 @@
 using ValveResourceFormat;
 using SteamDatabase.ValvePak;
-using System.Diagnostics;
+using System.IO.Enumeration;
 
 if (args.Length == 0)
 {
-    Console.WriteLine("Please specify a '.vpk' map file.");
-    Console.ReadKey();
+    Console.WriteLine("Please specify a '.vpk' map file or folder.");
+    Console.ReadKey(true);
     return;
+}
+
+if (Directory.Exists(args[0]))
+{
+    PackVpkFromDirectory(args[0]);
+    return;
+}
+else if (!Path.GetExtension(args[0]).Contains(".vpk"))
+{
+	Console.WriteLine("Invalid file specified.");
+	Console.ReadKey(true);
+	return;
 }
 
 var vpkFile = args[0];
@@ -37,22 +49,10 @@ if (mod is null || game is null)
 }
 
 Console.WriteLine("Do you want to attempt to auto-pack the map vpk? (y/n)\n" +
-    "You can skip this if you want to add extra files like sounds manually.");
-ConsoleKeyInfo key = Console.ReadKey();
+    "You can skip this if you want to add extra files like sounds manually.\n");
+ConsoleKeyInfo key = Console.ReadKey(true);
 
 bool doVpkPack = key.KeyChar == 'y';
-
-// This assumes the user has cs2 installed properly with csgo. Since cs2 doesn't have a vpk.exe, we use csgo's instead. It's sloppy but works...
-var vpkExe = Path.Combine(game.Parent.FullName, "bin", "vpk.exe");
-
-if (doVpkPack && !File.Exists(vpkExe))
-{
-    Console.WriteLine("Could not find 'vpk.exe' in your root bin folder, vpk will not be packed.\n" +
-                      "Press any key to continue...");
-    Console.ReadKey();
-
-    doVpkPack = false;
-}
 
 // Backup the original vpk
 if (doVpkPack)
@@ -77,6 +77,9 @@ var inPackage = new HashSet<string>();
 
 ExtractPackage(package, false);
 
+if (!doVpkPack)
+	package.Dispose();
+
 var vmap_path = Path.Combine(mapFolder, "maps", $"{mapname}.vmap_c");
 var vmap_c = new Resource();
 vmap_c.Read(vmap_path);
@@ -84,45 +87,78 @@ var new_files_added = 0;
 CopyExternalReferences(vmap_c);
 
 vmap_c.Dispose();
-package.Dispose();
 
+// Radar
 AddExtraFile($"/resource/overviews/{mapname}.txt");
 AddExtraFile($"/panorama/images/overheadmaps/{mapname}_radar_tga.vtex_c");
+
+// Loading screen images
+for (int i = 1; i <= 10; i++)
+	AddExtraFile($"/panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
 
 if (!doVpkPack)
 {
     // Can't repack the map, so just move the map folder next to the original vpk
-    Console.WriteLine($"\nDone! Isolated all found assets into csgo_addons/mappacker/{mapname}\n" +
-        "You may drag that folder into any vpk.exe to pack.");
+    Console.WriteLine($"\nDone! Isolated all found assets into game/csgo_addons/mappacker/{mapname}\n" +
+                       "You may drag that folder onto this tool to pack.");
 }
 else
 {
-    // Run vpk.exe to pack the map
-    var vpkProcess = new Process();
-    vpkProcess.StartInfo.FileName = vpkExe;
-    vpkProcess.StartInfo.Arguments = $"\"{mapFolder}\"";
-    vpkProcess.StartInfo.UseShellExecute = false;
-    vpkProcess.StartInfo.CreateNoWindow = true;
-    vpkProcess.Start();
-    vpkProcess.WaitForExit();
+    package.Write(vpkFile + "_packed");
 
-    if (vpkProcess.ExitCode != 0)
-    {
-        Console.WriteLine("Failed to pack the map with 'vpk.exe'.");
-        Console.ReadKey();
-        return;
-    }
+    // Release the .vpk before overwriting it
+	package.Dispose();
+    File.Move(vpkFile + "_packed", vpkFile, true);
 
-    var finalMap = Path.Combine(Environment.CurrentDirectory, mapname + ".vpk");
-
-    // Rename file
-    File.Move(mapFolder + ".vpk", finalMap, true);
-    Console.WriteLine($"\nDone! Packed {new_files_added} new files into {mapname}.");
+	Console.WriteLine($"\nDone! Packed {new_files_added} new files into {mapname}.");
 
     Directory.Delete(mapFolder, true);
 }
 
 Console.ReadKey();
+
+void PackVpkFromDirectory(string dirPath)
+{
+    string vpkPath = dirPath + ".vpk";
+
+    Console.WriteLine($"Packing {dirPath} into a vpk...");
+
+    if (File.Exists(vpkPath))
+        File.Delete(vpkPath);
+
+    Package vpk = new Package();
+
+	var mapFiles = new FileSystemEnumerable<string>(
+	    dirPath,
+	    (ref FileSystemEntry entry) => entry.ToSpecifiedFullPath(),
+	    new EnumerationOptions
+	    {
+		    RecurseSubdirectories = true,
+	    }
+    );
+
+    uint fileCount = 0;
+    int vpkSize = 0;
+
+	foreach (var file in mapFiles)
+	{
+		if (!File.Exists(file))
+			continue;
+
+		var name = file[(dirPath.Length + 1)..];
+		var data = File.ReadAllBytes(file);
+		vpk.AddFile(name, data);
+
+        fileCount++;
+        vpkSize += data.Length;
+	}
+
+    vpk.Write(vpkPath);
+    vpk.Dispose();
+
+	Console.WriteLine($"Wrote {Path.GetFileName(vpkPath)} with {fileCount} files totalling {vpkSize} bytes.");
+    Console.ReadKey();
+}
 
 void ExtractPackage(Package package, bool vmapOnly)
 {
@@ -154,9 +190,17 @@ void AddExtraFile(string refFileName)
     if (File.Exists(fullFilePath))
     {
         Console.WriteLine($"Found '{refFileName}' in the mod folder. Copying...");
-        var newFileFullPath = mapFolder + refFileName;
-        Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
-        File.Copy(fullFilePath, newFileFullPath, true);
+        if (doVpkPack)
+        {
+			var data = File.ReadAllBytes(fullFilePath);
+			package.AddFile(refFileName, data);
+		}
+        else
+        {
+            var newFileFullPath = mapFolder + refFileName;
+            Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
+            File.Copy(fullFilePath, newFileFullPath, true);
+        }
     }
     else
     {
@@ -168,8 +212,9 @@ void AddExtraMap(string mapName)
 {
     mapName.Remove(mapName.Length - 2, 2);
     var package = new Package();
-    var mapPath = Path.Combine(mod.FullName, "maps", mapName + ".vpk");
-    package.Read(mapPath);
+    var mapPath = Path.Combine("maps", mapName + ".vpk");
+    var mapFullPath = Path.Combine(mod.FullName, mapPath);
+    package.Read(mapFullPath);
 
     ExtractPackage(package, true);
     package.Dispose();
@@ -182,8 +227,17 @@ void AddExtraMap(string mapName)
     vmap_c.Dispose();
     File.Delete(vmap_path);
 
-    var newMapFullPath = Path.Combine(mapFolder, "maps", mapName + ".vpk");
-    File.Copy(mapPath, newMapFullPath, true);
+	if (doVpkPack)
+	{
+		var data = File.ReadAllBytes(mapFullPath);
+		package.AddFile(mapPath, data);
+	}
+    else
+    {
+		var newMapFullPath = Path.Combine(mapFolder, "maps", mapName + ".vpk");
+		File.Copy(mapPath, newMapFullPath, true);
+	}
+
     new_files_added++;
 }
 
@@ -248,8 +302,15 @@ void CopyExternalReferences(Resource resource, int depth = 0)
             continue;
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(newFullFilePath)!);
-        File.Copy(fullRefFilePath, newFullFilePath);
+		if (doVpkPack)
+		{
+			var data = File.ReadAllBytes(fullRefFilePath);
+			package.AddFile(refFileName, data);
+		}
+
+		Directory.CreateDirectory(Path.GetDirectoryName(newFullFilePath)!);
+		File.Copy(fullRefFilePath, newFullFilePath);
+
         new_files_added++;
     }
 }

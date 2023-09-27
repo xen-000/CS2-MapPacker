@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ValvePak" Version="1.5.0.59" />
+    <PackageReference Include="ValvePak" Version="1.6.1.71" />
     <PackageReference Include="ValveResourceFormat" Version="5.0.2120" />
   </ItemGroup>
 
