@@ -16,9 +16,9 @@ if (Directory.Exists(args[0]))
 }
 else if (!Path.GetExtension(args[0]).Contains(".vpk"))
 {
-	Console.WriteLine("Invalid file specified.");
-	Console.ReadKey(true);
-	return;
+    Console.WriteLine("Invalid file specified.");
+    Console.ReadKey(true);
+    return;
 }
 
 var vpkFile = args[0];
@@ -63,24 +63,24 @@ if (doVpkPack)
 var mapname = Path.GetFileNameWithoutExtension(vpkFile);
 
 // Create a brand new folder to extract the map into.
-// Since source2 doesn't like loose map files inside the maps folder, let's do this outside of the addon/mod
-var mapFolder = Path.Combine(game.FullName, "csgo_addons", "mappacker", $"{mapname}")!;
-if (Directory.Exists(mapFolder))
+// Since source2 doesn't like loose map files inside the maps folder, lets do this outside of the addon/mod
+var mapPackFolder = Path.Combine(game.FullName, "csgo_addons", "mappacker", $"{mapname}")!;
+if (Directory.Exists(mapPackFolder))
 {
-    Directory.Delete(mapFolder, true);
+    Directory.Delete(mapPackFolder, true);
 }
 
-var package = new Package();
-package.Read(vpkFile);
+var outPackage = new Package();
+outPackage.Read(vpkFile);
 
-var inPackage = new HashSet<string>();
+var inPackageSet = new HashSet<string>();
 
-ExtractPackage(package, false);
+ExtractPackage(outPackage, false);
 
 if (!doVpkPack)
-	package.Dispose();
+    outPackage.Dispose();
 
-var vmap_path = Path.Combine(mapFolder, "maps", $"{mapname}.vmap_c");
+var vmap_path = Path.Combine(mapPackFolder, "maps", $"{mapname}.vmap_c");
 var vmap_c = new Resource();
 vmap_c.Read(vmap_path);
 var new_files_added = 0;
@@ -94,7 +94,7 @@ AddExtraFile($"/panorama/images/overheadmaps/{mapname}_radar_tga.vtex_c");
 
 // Loading screen images
 for (int i = 1; i <= 10; i++)
-	AddExtraFile($"/panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
+    AddExtraFile($"/panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
 
 if (!doVpkPack)
 {
@@ -104,15 +104,15 @@ if (!doVpkPack)
 }
 else
 {
-    package.Write(vpkFile + "_packed");
+    outPackage.Write(vpkFile + "_packed");
 
     // Release the .vpk before overwriting it
-	package.Dispose();
+    outPackage.Dispose();
     File.Move(vpkFile + "_packed", vpkFile, true);
 
-	Console.WriteLine($"\nDone! Packed {new_files_added} new files into {mapname}.");
+    Console.WriteLine($"\nDone! Packed {new_files_added} new files into {mapname}.");
 
-    Directory.Delete(mapFolder, true);
+    Directory.Delete(mapPackFolder, true);
 }
 
 Console.ReadKey();
@@ -128,35 +128,35 @@ void PackVpkFromDirectory(string dirPath)
 
     Package vpk = new Package();
 
-	var mapFiles = new FileSystemEnumerable<string>(
-	    dirPath,
-	    (ref FileSystemEntry entry) => entry.ToSpecifiedFullPath(),
-	    new EnumerationOptions
-	    {
-		    RecurseSubdirectories = true,
-	    }
+    var mapFiles = new FileSystemEnumerable<string>(
+        dirPath,
+        (ref FileSystemEntry entry) => entry.ToSpecifiedFullPath(),
+        new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+        }
     );
 
     uint fileCount = 0;
     int vpkSize = 0;
 
-	foreach (var file in mapFiles)
-	{
-		if (!File.Exists(file))
-			continue;
+    foreach (var file in mapFiles)
+    {
+        if (!File.Exists(file))
+            continue;
 
-		var name = file[(dirPath.Length + 1)..];
-		var data = File.ReadAllBytes(file);
-		vpk.AddFile(name, data);
+        var name = file[(dirPath.Length + 1)..];
+        var data = File.ReadAllBytes(file);
+        vpk.AddFile(name, data);
 
         fileCount++;
         vpkSize += data.Length;
-	}
+    }
 
     vpk.Write(vpkPath);
     vpk.Dispose();
 
-	Console.WriteLine($"Wrote {Path.GetFileName(vpkPath)} with {fileCount} files totalling {vpkSize} bytes.");
+    Console.WriteLine($"Wrote {Path.GetFileName(vpkPath)} with {fileCount} files totalling {vpkSize} bytes.");
     Console.ReadKey();
 }
 
@@ -167,59 +167,66 @@ void ExtractPackage(Package package, bool vmapOnly)
         foreach (var entry in entries)
         {
             var filePath = entry.GetFullPath();
-            inPackage.Add(filePath);
+            inPackageSet.Add(filePath);
 
             if (vmapOnly && !filePath.Contains("vmap_c"))
                 continue;
 
-            var extractFilePath = Path.Combine(mapFolder, filePath);
+            var extractFilePath = Path.Combine(mapPackFolder, filePath);
             Directory.CreateDirectory(Path.GetDirectoryName(extractFilePath)!);
 
             package.ReadEntry(entry, out var data);
             File.WriteAllBytes(extractFilePath, data);
-
-            Console.WriteLine($"Extracted {filePath}");
         }
     }
+
+    Console.WriteLine($"Extracted {package.FileName}");
 }
 
 void AddExtraFile(string refFileName)
 {
     var fullFilePath = mod.FullName + refFileName;
 
-    if (File.Exists(fullFilePath))
+    if (!File.Exists(fullFilePath))
     {
-        Console.WriteLine($"Found '{refFileName}' in the mod folder. Copying...");
-        if (doVpkPack)
-        {
-			var data = File.ReadAllBytes(fullFilePath);
-			package.AddFile(refFileName, data);
-		}
-        else
-        {
-            var newFileFullPath = mapFolder + refFileName;
-            Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
-            File.Copy(fullFilePath, newFileFullPath, true);
-        }
+        Console.WriteLine($"Could not find '{refFileName}' in the mod folder.");
+        return;
+    }
+
+    Console.WriteLine($"Adding '{refFileName}'");
+    if (doVpkPack)
+    {
+        var data = File.ReadAllBytes(fullFilePath);
+        outPackage.AddFile(refFileName, data);
     }
     else
     {
-        Console.WriteLine($"Could not find '{refFileName}' in the mod folder.");
+        var newFileFullPath = mapPackFolder + refFileName;
+        Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
+        File.Copy(fullFilePath, newFileFullPath, true);
     }
 }
 
 void AddExtraMap(string mapName)
 {
-    mapName.Remove(mapName.Length - 2, 2);
-    var package = new Package();
     var mapPath = Path.Combine("maps", mapName + ".vpk");
     var mapFullPath = Path.Combine(mod.FullName, mapPath);
-    package.Read(mapFullPath);
 
-    ExtractPackage(package, true);
-    package.Dispose();
+    if (!File.Exists(mapFullPath))
+    {
+        Console.WriteLine($"Could not find {mapPath} in the mod folder.");
+        return;
+    }
 
-    var vmap_path = Path.Combine(mapFolder, "maps", $"{mapName}.vmap_c");
+    Console.WriteLine($"Adding '{mapName}'");
+
+    var mapPackage = new Package();
+    mapPackage.Read(mapFullPath);
+
+    ExtractPackage(mapPackage, true);
+    mapPackage.Dispose();
+
+    var vmap_path = Path.Combine(mapPackFolder, "maps", $"{mapName}.vmap_c");
     var vmap_c = new Resource();
     vmap_c.Read(vmap_path);
     CopyExternalReferences(vmap_c);
@@ -227,16 +234,16 @@ void AddExtraMap(string mapName)
     vmap_c.Dispose();
     File.Delete(vmap_path);
 
-	if (doVpkPack)
-	{
-		var data = File.ReadAllBytes(mapFullPath);
-		package.AddFile(mapPath, data);
-	}
+    if (doVpkPack)
+    {
+        var data = File.ReadAllBytes(mapFullPath);
+        outPackage.AddFile(mapPath, data);
+    }
     else
     {
-		var newMapFullPath = Path.Combine(mapFolder, "maps", mapName + ".vpk");
-		File.Copy(mapPath, newMapFullPath, true);
-	}
+        var newMapFullPath = Path.Combine(mapPackFolder, "maps", mapName + ".vpk");
+        File.Copy(mapFullPath, newMapFullPath, true);
+    }
 
     new_files_added++;
 }
@@ -244,9 +251,7 @@ void AddExtraMap(string mapName)
 void CopyExternalReferences(Resource resource, int depth = 0)
 {
     if (resource.ExternalReferences is null)
-    {
         return;
-    }
 
     foreach (var resource_reference in resource.ExternalReferences.ResourceRefInfoList)
     {
@@ -254,9 +259,7 @@ void CopyExternalReferences(Resource resource, int depth = 0)
 
         // lua vscripts are authored directly in the game folder, they don't get compiled by the engine
         if (!refFileName.EndsWith(".lua"))
-        {
             refFileName += "_c";
-        }
 
         // Extra maps like skyboxes are handled separately, their vmap should not be packed
         if (refFileName.EndsWith(".vmap_c"))
@@ -265,10 +268,8 @@ void CopyExternalReferences(Resource resource, int depth = 0)
             continue;
         }
 
-        if (refFileName.StartsWith('_') || inPackage.Contains(refFileName))
-        {
+        if (refFileName.StartsWith('_') || inPackageSet.Contains(refFileName))
             continue;
-        }
 
         var fullRefFilePath = Path.Combine(mod.FullName, refFileName);
         if (!File.Exists(fullRefFilePath))
@@ -278,10 +279,9 @@ void CopyExternalReferences(Resource resource, int depth = 0)
         }
 
         for (var i = 0; i < depth; i++)
-        {
             Console.Write("  ");
-        }
-        Console.WriteLine($"Found '{refFileName}' in the mod folder. Copying...");
+
+        Console.WriteLine($"Adding '{refFileName}'");
 
         using var child_resource = new Resource();
 
@@ -295,21 +295,21 @@ void CopyExternalReferences(Resource resource, int depth = 0)
         }
 
         // Copy the file to the map folder
-        var newFullFilePath = Path.Combine(mapFolder, refFileName);
+        var newFullFilePath = Path.Combine(mapPackFolder, refFileName);
 
         if (File.Exists(newFullFilePath))
         {
             continue;
         }
 
-		if (doVpkPack)
-		{
-			var data = File.ReadAllBytes(fullRefFilePath);
-			package.AddFile(refFileName, data);
-		}
+        if (doVpkPack)
+        {
+            var data = File.ReadAllBytes(fullRefFilePath);
+            outPackage.AddFile(refFileName, data);
+        }
 
-		Directory.CreateDirectory(Path.GetDirectoryName(newFullFilePath)!);
-		File.Copy(fullRefFilePath, newFullFilePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(newFullFilePath)!);
+        File.Copy(fullRefFilePath, newFullFilePath);
 
         new_files_added++;
     }
