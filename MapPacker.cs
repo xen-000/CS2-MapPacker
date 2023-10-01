@@ -96,6 +96,9 @@ AddExtraFile($"/panorama/images/overheadmaps/{mapname}_radar_tga.vtex_c");
 for (int i = 1; i <= 10; i++)
     AddExtraFile($"/panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
 
+// Config files
+AddExtraDirectory($"/cfg");
+
 if (!doVpkPack)
 {
     // Can't repack the map, so just move the map folder next to the original vpk
@@ -204,6 +207,55 @@ void AddExtraFile(string refFileName)
         var newFileFullPath = mapPackFolder + refFileName;
         Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
         File.Copy(fullFilePath, newFileFullPath, true);
+    }
+}
+
+// Add the directory including all the files and subdirectories inside it recursively.
+void AddExtraDirectory(string refDirName)
+{
+    var fullDirPath = mod.FullName + refDirName;
+    if (!Directory.Exists(fullDirPath))
+    {
+        Console.WriteLine($"Could not find directory: '{refDirName}' in the mod folder.");
+        return;
+    }
+
+    if (doVpkPack)
+    {
+        foreach (var file in Directory.EnumerateFiles(fullDirPath, "*.*", SearchOption.AllDirectories))
+        {
+            var data = File.ReadAllBytes(file);
+            var relativePath = Path.GetRelativePath(mod.FullName, file);
+            outPackage.AddFile(relativePath, data);
+        }
+    }
+    else
+    {
+        CopyDirectory(fullDirPath, mapPackFolder + refDirName);
+    }
+}
+
+void CopyDirectory(string src, string dst)
+{
+    var dir = new DirectoryInfo(src);
+    var dirs = dir.GetDirectories();
+    Directory.CreateDirectory(dst);
+    foreach(FileInfo file in dir.GetFiles())
+    {
+        string targetFile = Path.Combine(dst, file.Name);
+        try
+        { 
+            File.Copy(file.FullName, targetFile, true);
+        }
+        catch(Exception e)
+        {
+            Console.WriteLine($"Could not copy file '{file.Name}' to '{targetFile}': {e.ToString()}");
+        }
+    }
+    foreach(DirectoryInfo subDir in dirs)
+    {
+        string newDest = Path.Combine(dst, subDir.Name);
+        CopyDirectory(subDir.FullName, newDest);
     }
 }
 
