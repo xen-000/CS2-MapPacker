@@ -89,12 +89,12 @@ CopyExternalReferences(vmap_c);
 vmap_c.Dispose();
 
 // Radar
-AddExtraFile($"/resource/overviews/{mapname}.txt");
-AddExtraFile($"/panorama/images/overheadmaps/{mapname}_radar_tga.vtex_c");
+AddExtraFile($"resource/overviews/{mapname}.txt");
+AddExtraFile($"panorama/images/overheadmaps/{mapname}_radar_tga.vtex_c");
 
 // Loading screen images
 for (int i = 1; i <= 10; i++)
-    AddExtraFile($"/panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
+    AddExtraFile($"panorama/images/map_icons/screenshots/1080p/{mapname}_{i}_png.vtex_c");
 
 if (!doVpkPack)
 {
@@ -185,7 +185,7 @@ void ExtractPackage(Package package, bool vmapOnly)
 
 void AddExtraFile(string refFileName)
 {
-    var fullFilePath = mod.FullName + refFileName;
+    var fullFilePath = Path.Combine(mod.FullName, refFileName);
 
     if (!File.Exists(fullFilePath))
     {
@@ -201,7 +201,7 @@ void AddExtraFile(string refFileName)
     }
     else
     {
-        var newFileFullPath = mapPackFolder + refFileName;
+        var newFileFullPath = Path.Combine(mapPackFolder, refFileName);
         Directory.CreateDirectory(Path.GetDirectoryName(newFileFullPath)!);
         File.Copy(fullFilePath, newFileFullPath, true);
     }
