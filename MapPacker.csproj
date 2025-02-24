@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Version>1.0</Version>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
     <PublishTrimmed>true</PublishTrimmed>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
@@ -14,8 +14,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ValvePak" Version="1.6.1.71" />
-    <PackageReference Include="ValveResourceFormat" Version="5.0.2120" />
+    <PackageReference Include="ValvePak" Version="2.0.1.107" />
+    <PackageReference Include="ValveResourceFormat" Version="11.1.4050" />
   </ItemGroup>
 
 </Project>
